@@ -1,0 +1,17 @@
+{
+  "name": "Conakry Explorer",
+  "short_name": "Conakry",
+  "description": "Explore Conakry avec le brouillard de guerre",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "icons": [
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Flag_of_Guinea.svg/192px-Flag_of_Guinea.svg.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
