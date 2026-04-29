@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Conakry"/>
+  <meta name="theme-color" content="#0a0a0f"/>
+  <link rel="manifest" href="./manifest.json"/>
+  <title>Conakry Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Rajdhani:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    :root {
+      --gold:#c8a96e; --gold-dim:#7a6040;
+      --bg:#0a0a0f; --bg2:#0d0d18; --border:#2a2218;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body { width:100%; height:100%; background:var(--bg); font-family:'Rajdhani',sans-serif; color:var(--gold); overflow:hidden; touch-action:none; }
+    #map { width:100vw; height:100vh; position:fixed; top:0; left:0; }
+    .leaflet-container { background:var(--bg2) !important; }
+    .leaflet-tile-pane { filter:grayscale(30%) sepia(15%) brightness(0.65); }
+    .leaflet-control-zoom { border:1px solid var(--border) !important; background:rgba(10,10,15,0.9) !important; border-radius:4px !important; }
+    .leaflet-control-zoom a { color:var(--gold) !important; background:transparent !important; border-color:var(--border) !important; font-size:16px !important; line-height:28px !important; width:28px !important; height:28px !important; }
+    .leaflet-control-attribution { background:rgba(10,10,15,0.6) !important; color:#333 !important; font-size:8px !important; }
+    #fog { position:fixed; top:0; left:0; width:100vw; height:100vh; pointer-events:none; z-index:500; }
+    #header { position:fixed; top:0; left:0; right:0; z-index:800; padding:env(safe-area-inset-top,8px) 16px 0; background:linear-gradient(to bottom,rgba(10,10,15,0.95) 60%,transparent); pointer-events:none; }
+    #header-inner { display:flex; align-items:center; justify-content:space-between; padding:10px 0 16px; }
+    #app-title { font-family:'Cinzel',serif; font-size:1.1rem; letter-spacing:.18em; color:#e8c97e; text-shadow:0 0 16px rgba(200,169,110,.5); }
+    #gps-badge { display:flex; align-items:center; gap:6px; font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-dim); }
+    #gps-dot { width:7px; height:7px; border-radius:50%; background:#555; transition:background .4s; }
+    #gps-dot.active { background:#4CAF50; box-shadow:0 0 6px #4CAF50; animation:pulse 2s infinite; }
+    #gps-dot.waiting { background:#f59e0b; box-shadow:0 0 6px #f59e0b; }
+    #gps-dot.error { background:#ef4444; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+    #prog-wrap { position:fixed; top:0; left:0; right:0; z-index:799; padding-top:calc(env(safe-area-inset-top,0px) + 52px); }
+    #prog-bar { height:2px; background:linear-gradient(to right,#6a4828,var(--gold)); width:0%; transition:width .6s ease; box-shadow:0 0 8px rgba(200,169,110,.4); }
+    #hud { position:fixed; bottom:0; left:0; right:0; z-index:800; padding:0 16px calc(env(safe-area-inset-bottom,8px) + 8px); background:linear-gradient(to top,rgba(10,10,15,.95) 60%,transparent); display:flex; align-items:flex-end; justify-content:space-between; pointer-events:none; }
+    #hud-left { font-size:.7rem; color:var(--gold-dim); line-height:2; letter-spacing:.08em; }
+    #hud-left span { color:var(--gold); font-size:.85rem; }
+    #hud-right { display:flex; flex-direction:column; align-items:flex-end; gap:8px; pointer-events:all; }
+    .hud-btn { background:rgba(10,10,15,.85); border:1px solid var(--border); color:var(--gold-dim); font-family:'Rajdhani',sans-serif; font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; padding:7px 14px; cursor:pointer; transition:all .25s; border-radius:2px; }
+    .hud-btn:hover,.hud-btn:active { border-color:var(--gold); color:var(--gold); background:rgba(200,169,110,.08); }
+    .hud-btn.active { border-color:#4CAF50; color:#4CAF50; }
+    #qpop { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:900; font-family:'Cinzel',serif; font-size:1.3rem; letter-spacing:.18em; color:#e8c97e; text-shadow:0 0 24px rgba(200,169,110,.7); white-space:nowrap; opacity:0; transition:opacity .4s; pointer-events:none; text-align:center; }
+    .player-marker { width:20px; height:20px; border-radius:50%; background:radial-gradient(circle,rgba(200,169,110,1) 0%,rgba(200,169,110,0.3) 70%,transparent 100%); border:2px solid rgba(200,169,110,0.8); box-shadow:0 0 12px rgba(200,169,110,0.6); animation:playerPulse 2s infinite; }
+    @keyframes playerPulse { 0%,100%{box-shadow:0 0 12px rgba(200,169,110,.6);transform:scale(1)}50%{box-shadow:0 0 20px rgba(200,169,110,.9);transform:scale(1.1)} }
+    .accuracy-ring { border-radius:50%; background:rgba(200,169,110,0.06); border:1px solid rgba(200,169,110,0.2); }
+    #offline-notice { position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:900; background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.3); color:#fca5a5; font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; padding:6px 14px; border-radius:2px; opacity:0; transition:opacity .4s; pointer-events:none; }
+    #offline-notice.show { opacity:1; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<canvas id="fog"></canvas>
+<div id="header">
+  <div id="header-inner">
+    <div id="app-title">CONAKRY</div>
+    <div id="gps-badge"><div id="gps-dot"></div><span id="gps-label">GPS</span></div>
+  </div>
+</div>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+<div id="qpop"></div>
+<div id="offline-notice">📵 Hors ligne</div>
+<div id="hud">
+  <div id="hud-left">Quartiers découverts<br><span id="stat-pct">—</span></div>
+  <div id="hud-right">
+    <button class="hud-btn" id="btn-gps">◎ Centrer</button>
+    <button class="hud-btn" id="btn-reset">↺ Réinitialiser</button>
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const CFG = { center:[9.537,-13.677], zoom:15, visRadius:100, gpsRadius:80 };
+const QUARTIERS = [
+  {name:"Dixinn",lat:9.537,lng:-13.677,revealed:false},
+  {name:"Kaloum",lat:9.530,lng:-13.717,revealed:false},
+  {name:"Matam",lat:9.558,lng:-13.660,revealed:false},
+  {name:"Ratoma",lat:9.590,lng:-13.620,revealed:false},
+  {name:"Matoto",lat:9.510,lng:-13.580,revealed:false},
+  {name:"Kipé",lat:9.580,lng:-13.635,revealed:false},
+  {name:"Hamdallaye",lat:9.565,lng:-13.645,revealed:false},
+  {name:"Cosa",lat:9.548,lng:-13.655,revealed:false},
+  {name:"Kobaya",lat:9.604,lng:-13.628,revealed:false},
+  {name:"Lambanyi",lat:9.570,lng:-13.663,revealed:false},
+  {name:"Sangoyah",lat:9.525,lng:-13.605,revealed:false},
+  {name:"Nongo",lat:9.618,lng:-13.640,revealed:false},
+];
+const exploredPoints = loadState();
+let playerMarker=null, accuracyCircle=null;
+const map = L.map('map',{center:CFG.center,zoom:CFG.zoom,zoomControl:true});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(map);
+const canvas=document.getElementById('fog');
+const ctx=canvas.getContext('2d');
+function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;drawFog();}
+function latlngToPx(lat,lng){const pt=map.latLngToContainerPoint([lat,lng]);return[pt.x,pt.y];}
+function drawFog(){
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='rgba(8,8,14,1)';
+  ctx.fillRect(0,0,W,H);
+  ctx.save();
+  ctx.globalCompositeOperation='destination-out';
+  exploredPoints.forEach(ep=>{
+    const[px,py]=latlngToPx(ep.lat,ep.lng);
+    const grad=ctx.createRadialGradient(px,py,0,px,py,ep.r);
+    grad.addColorStop(0,'rgba(0,0,0,1)');
+    grad.addColorStop(0.65,'rgba(0,0,0,0.95)');
+    grad.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.arc(px,py,ep.r,0,Math.PI*2);ctx.fill();
+  });
+  ctx.restore();
+  ctx.save();
+  ctx.globalCompositeOperation='source-over';
+  exploredPoints.forEach(ep=>{
+    const[px,py]=latlngToPx(ep.lat,ep.lng);
+    const grad=ctx.createRadialGradient(px,py,0,px,py,ep.r);
+    grad.addColorStop(0,'rgba(8,8,14,0.38)');
+    grad.addColorStop(0.6,'rgba(8,8,14,0.45)');
+    grad.addColorStop(1,'rgba(8,8,14,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.arc(px,py,ep.r,0,Math.PI*2);ctx.fill();
+  });
+  ctx.restore();
+}
+function addExploredPoint(lat,lng,r){
+  const too_close=exploredPoints.some(ep=>{
+    const dlat=(ep.lat-lat)*111000;
+    const dlng=(ep.lng-lng)*111000*Math.cos(lat*Math.PI/180);
+    return Math.sqrt(dlat*dlat+dlng*dlng)<15;
+  });
+  if(!too_close){exploredPoints.push({lat,lng,r});saveState();}
+  drawFog();updateStats();checkQuartiers(lat,lng);
+}
+function startGPS(){
+  if(!navigator.geolocation){setGPS('error','Non dispo');return;}
+  setGPS('waiting','Recherche…');
+  navigator.geolocation.watchPosition(
+    pos=>{
+      const{latitude:lat,longitude:lng,accuracy}=pos.coords;
+      setGPS('active',`±${Math.round(accuracy)}m`);
+      updatePlayerMarker(lat,lng,accuracy);
+      addExploredPoint(lat,lng,CFG.gpsRadius);
+      document.getElementById('btn-gps').classList.add('active');
+    },
+    err=>{setGPS('error','Erreur GPS');},
+    {enableHighAccuracy:true,maximumAge:5000,timeout:15000}
+  );
+}
+function setGPS(cls,label){
+  document.getElementById('gps-dot').className=cls;
+  document.getElementById('gps-label').textContent=label;
+}
+function updatePlayerMarker(lat,lng,accuracy){
+  if(playerMarker){playerMarker.setLatLng([lat,lng]);accuracyCircle.setLatLng([lat,lng]).setRadius(accuracy);}
+  else{
+    const icon=L.divIcon({className:'',html:'<div class="player-marker"></div>',iconSize:[20,20],iconAnchor:[10,10]});
+    playerMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map);
+    accuracyCircle=L.circle([lat,lng],{radius:accuracy,className:'accuracy-ring',interactive:false}).addTo(map);
+  }
+}
+document.getElementById('btn-gps').addEventListener('click',()=>{
+  if(playerMarker)map.setView(playerMarker.getLatLng(),16);
+  else startGPS();
+});
+map.on('click',e=>addExploredPoint(e.latlng.lat,e.latlng.lng,CFG.visRadius));
+function checkQuartiers(lat,lng){
+  QUARTIERS.forEach(q=>{
+    if(q.revealed)return;
+    const dlat=(q.lat-lat)*111000;
+    const dlng=(q.lng-lng)*111000*Math.cos(lat*Math.PI/180);
+    if(Math.sqrt(dlat*dlat+dlng*dlng)<400){q.revealed=true;showQPopup(q.name);}
+  });
+}
+function showQPopup(name){
+  const el=document.getElementById('qpop');
+  el.textContent=name;el.style.opacity='1';
+  setTimeout(()=>el.style.opacity='0',2500);
+}
+function updateStats(){
+  const r=QUARTIERS.filter(q=>q.revealed).length;
+  document.getElementById('stat-pct').textContent=r>0?`${r}/${QUARTIERS.length} quartiers`:'—';
+  document.getElementById('prog-bar').style.width=Math.round(r/QUARTIERS.length*100)+'%';
+}
+function saveState(){
+  try{localStorage.setItem('cx-pts',JSON.stringify(exploredPoints));localStorage.setItem('cx-q',JSON.stringify(QUARTIERS.map(q=>q.revealed)));}catch(e){}
+}
+function loadState(){
+  try{
+    const q=localStorage.getItem('cx-q');
+    if(q){const a=JSON.parse(q);a.forEach((v,i)=>{if(QUARTIERS[i])QUARTIERS[i].revealed=v;});}
+    const p=localStorage.getItem('cx-pts');
+    return p?JSON.parse(p):[];
+  }catch(e){return[];}
+}
+document.getElementById('btn-reset').addEventListener('click',()=>{
+  if(!confirm('Effacer toute la progression ?'))return;
+  exploredPoints.length=0;QUARTIERS.forEach(q=>q.revealed=false);
+  localStorage.removeItem('cx-pts');localStorage.removeItem('cx-q');
+  map.setView(CFG.center,CFG.zoom);drawFog();updateStats();
+  addExploredPoint(CFG.center[0],CFG.center[1],CFG.visRadius*1.5);
+});
+window.addEventListener('offline',()=>document.getElementById('offline-notice').classList.add('show'));
+window.addEventListener('online',()=>document.getElementById('offline-notice').classList.remove('show'));
+if(!navigator.onLine)document.getElementById('offline-notice').classList.add('show');
+map.on('move',drawFog);map.on('moveend',drawFog);map.on('zoom',drawFog);
+window.addEventListener('resize',resizeCanvas);
+resizeCanvas();
+map.whenReady(()=>{
+  if(exploredPoints.length===0)setTimeout(()=>addExploredPoint(CFG.center[0],CFG.center[1],CFG.visRadius*1.5),500);
+  else{drawFog();updateStats();}
+  setTimeout(startGPS,800);
+});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body>
+  </html>
